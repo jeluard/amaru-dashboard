@@ -55,4 +55,3 @@ await writeFile(
   "utf8"
 );
 
-await cp(path.join(rootDir, "raw"), path.join(outDir, "raw"), { recursive: true });
