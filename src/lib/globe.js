@@ -44,6 +44,7 @@ async function addCountryBorders(viewer) {
   }
 
   viewer.dataSources.add(dataSource);
+  viewer.scene.requestRender();
   return dataSource;
 }
 
@@ -65,10 +66,12 @@ export function createGlobe(container, config) {
     sceneModePicker: false,
     selectionIndicator: false,
     timeline: false,
-    shouldAnimate: true,
+    shouldAnimate: false,
     skyBox: false,
     skyAtmosphere: false,
     scene3DOnly: true,
+    requestRenderMode: true,
+    maximumRenderTimeChange: Number.POSITIVE_INFINITY,
     imageryProvider: new Cesium.UrlTemplateImageryProvider({
       url: "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png",
       subdomains: ["a", "b", "c", "d"]
@@ -92,6 +95,7 @@ export function createGlobe(container, config) {
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(config.originLon, config.originLat, 18000000)
   });
+  viewer.scene.requestRender();
   addCountryBorders(viewer).catch(console.warn);
 
   let lastPeerFocus = 0;
@@ -109,6 +113,8 @@ export function createGlobe(container, config) {
 
   return {
     render(snapshot) {
+      let didMutateScene = false;
+
       // ── Origin marker (add once) ────────────────────────────────────────────
       if (!originEntity) {
         originEntity = viewer.entities.add({
@@ -128,6 +134,7 @@ export function createGlobe(container, config) {
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 10000000)
           }
         });
+        didMutateScene = true;
       }
 
       // ── Peer markers ────────────────────────────────────────────────────────
@@ -165,6 +172,7 @@ export function createGlobe(container, config) {
             }
           });
           peerEntities.set(peer.peer, { entity, status: peer.status, cityName: peer.cityName });
+          didMutateScene = true;
         } else if (cached.status !== peer.status || cached.cityName !== peer.cityName) {
           // Status or geo changed — update in place
           cached.entity.point.color = new Cesium.ConstantProperty(Cesium.Color.fromCssColorString(color));
@@ -172,6 +180,7 @@ export function createGlobe(container, config) {
           cached.entity.label.text = new Cesium.ConstantProperty(labelText);
           cached.status = peer.status;
           cached.cityName = peer.cityName;
+          didMutateScene = true;
         }
       }
 
@@ -180,6 +189,7 @@ export function createGlobe(container, config) {
         if (!livePeerKeys.has(key)) {
           viewer.entities.remove(entity);
           peerEntities.delete(key);
+          didMutateScene = true;
         }
       }
 
@@ -206,6 +216,7 @@ export function createGlobe(container, config) {
           }
         });
         arcEntities.set(arcKey, entity);
+        didMutateScene = true;
       }
 
       // Remove expired arc entities
@@ -213,6 +224,7 @@ export function createGlobe(container, config) {
         if (!liveArcKeys.has(key)) {
           viewer.entities.remove(entity);
           arcEntities.delete(key);
+          didMutateScene = true;
         }
       }
 
@@ -227,7 +239,12 @@ export function createGlobe(container, config) {
           });
           focusedPeerIndex += 1;
           lastPeerFocus = Date.now();
+          didMutateScene = true;
         }
+      }
+
+      if (didMutateScene) {
+        viewer.scene.requestRender();
       }
     }
   };
