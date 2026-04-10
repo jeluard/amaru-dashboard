@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Amaru Live Dashboard</title>
+    <meta
+      name="description"
+      content="Real-time Amaru traces, metrics, peer geography, and epoch progress in a live poster-grid dashboard."
+    >
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
+    <script>
+      window.CESIUM_BASE_URL = "https://cdn.jsdelivr.net/npm/cesium@1.126.0/Build/Cesium/";
+    </script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/cesium@1.126.0/Build/Cesium/Widgets/widgets.css"
+    >
+    <script defer src="https://cdn.jsdelivr.net/npm/cesium@1.126.0/Build/Cesium/Cesium.js"></script>
+    <script type="module" src="./dist/main.js"></script>
+  </head>
+  <body>
+    <div id="app" class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Amaru dashboard</h1>
+        </div>
+        <div class="status-line">
+          <span id="connection-pill" class="status-pill status-pill--idle">idle</span>
+          <span id="source-label" class="status-meta">waiting for stream</span>
+        </div>
+      </header>
+
+      <main class="poster-grid">
+        <section class="tile tile--hero tile--blue" id="hero-tile">
+          <div class="tile-no-data">No data received yet</div>
+          <p class="tile-label">Current progress</p>
+          <div class="tile-body tile-body--progress">
+            <div class="progress-col">
+              <p class="progress-sub-label">Block</p>
+              <div id="current-block-number" class="display-value">--</div>
+              <dl class="detail-stack">
+                <div>
+                  <dt>Hash</dt>
+                  <dd id="current-block-hash">No block yet</dd>
+                </div>
+                <div>
+                  <dt>Slot</dt>
+                  <dd id="current-slot">--</dd>
+                </div>
+              </dl>
+            </div>
+            <div class="progress-col progress-col--epoch">
+              <p class="progress-sub-label">Epoch</p>
+              <div id="epoch-number" class="display-value">--</div>
+              <p id="epoch-detail" class="tile-copy">Waiting for slot data</p>
+              <div class="segmented-progress" aria-hidden="true">
+                <div id="epoch-progress-bar" class="segmented-progress__fill"></div>
+              </div>
+              <p id="epoch-percent" class="progress-caption">0%</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="tile tile--globe tile--green" id="globe-tile">
+          <div class="globe-flipper" id="globe-flipper">
+            <!-- FRONT: globe -->
+            <div class="globe-face globe-face--front">
+              <div class="tile-no-data">No data received yet</div>
+              <div class="tile-header tile-header--overlay">
+                <div>
+                  <p class="tile-label">Connectivity</p>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+                  <button class="globe-flip-btn" id="globe-flip-btn" aria-label="Show peer table" title="Show peer details">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/>
+                      <path d="M3 9h18M9 21V9"/>
+                    </svg>
+                  </button>
+                  <div class="globe-summary">
+                    <span id="globe-peer-total">0 peers</span>
+                  </div>
+                </div>
+              </div>
+              <div id="globe-scene" class="globe-scene"></div>
+            </div>
+            <!-- BACK: peer table -->
+            <div class="globe-face globe-face--back">
+              <div class="tile-header">
+                <p class="tile-label" style="color:#05205f">Peer details</p>
+                <button class="globe-flip-btn globe-flip-btn--back" id="globe-flip-back-btn" aria-label="Show globe" title="Show globe">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                </button>
+              </div>
+              <div class="peer-table-wrap">
+                <table class="peer-table" id="peer-table">
+                  <thead>
+                    <tr>
+                      <th>Peer</th>
+                      <th>Status</th>
+                      <th>City</th>
+                      <th>Country</th>
+                      <th>Lat / Lon</th>
+                      <th>Source</th>
+                    </tr>
+                  </thead>
+                  <tbody id="peer-table-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tile tile--metrics tile--cream" id="metrics-tile">
+          <div class="tile-no-data">No data received yet</div>
+          <div class="tile-header">
+            <p class="tile-label">Metrics</p>
+            <button class="tile-settings-btn" id="metrics-settings-btn" aria-label="Metrics settings" title="Choose metrics">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
+          </div>
+          <div id="metrics-grid" class="metrics-grid"></div>
+          <div class="metrics-picker" id="metrics-picker" hidden>
+            <div class="metrics-picker__header">
+              <span class="metrics-picker__title">Choose metrics</span>
+              <button class="metrics-picker__reset" id="metrics-picker-reset">Reset to defaults</button>
+            </div>
+            <ul class="metrics-picker__list" id="metrics-picker-list"></ul>
+          </div>
+        </section>
+
+        <section class="tile tile--ops tile--yellow" id="ops-tile">
+          <div class="tile-no-data">No data received yet</div>
+          <div class="ops-combined-header">
+            <div class="tile-header">
+              <p class="tile-label">Events</p>
+            </div>
+            <div class="ops-stats">
+              <div>
+                <span class="ops-stats__label">Rollbacks</span>
+                <span id="rollback-count" class="ops-stats__value">0</span>
+              </div>
+              <div>
+                <span class="ops-stats__label">Stable writes</span>
+                <span id="stable-count" class="ops-stats__value">0</span>
+              </div>
+              <div>
+                <span class="ops-stats__label">Votes</span>
+                <span id="vote-count" class="ops-stats__value">0</span>
+              </div>
+              <div>
+                <span class="ops-stats__label">Epoch transitions</span>
+                <span id="transition-count" class="ops-stats__value">0</span>
+              </div>
+            </div>
+          </div>
+          <ol id="peer-feed" class="feed-list"></ol>
+        </section>
+      </main>
+    </div>
+
+    <!-- Epoch crossing celebration overlay -->
+    <div id="epoch-celebration" class="epoch-celebration" hidden aria-live="assertive" aria-label="New Epoch">
+      <canvas id="epoch-confetti-canvas" class="epoch-celebration__canvas"></canvas>
+      <div class="epoch-celebration__label">
+        <span class="epoch-celebration__heading">New Epoch!</span>
+        <span class="epoch-celebration__number" id="epoch-celebration-number"></span>
+      </div>
+    </div>
+  </body>
+</html>
