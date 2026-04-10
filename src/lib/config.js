@@ -12,15 +12,15 @@ function unique(values) {
 }
 
 function defaultWsCandidates() {
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const hostname = window.location.hostname || "localhost";
-
   return unique([
-    `${protocol}//${hostname}:8080/ws`,
-    `${protocol}//127.0.0.1:8080/ws`,
-    `${protocol}//${hostname}:8081/ws`,
-    `${protocol}//127.0.0.1:8081/ws`,
-    window.location.host ? `${protocol}//${window.location.host}/ws` : ""
+    "ws://127.0.0.1:8080/ws",
+    "ws://localhost:8080/ws",
+    "ws://127.0.0.1:8081/ws",
+    "ws://localhost:8081/ws",
+    "wss://127.0.0.1:8080/ws",
+    "wss://localhost:8080/ws",
+    "wss://127.0.0.1:8081/ws",
+    "wss://localhost:8081/ws"
   ]);
 }
 
@@ -43,5 +43,5 @@ export function readRuntimeConfig() {
 }
 
 export function describeSource(config) {
-  return config.ws || "probing local websocket endpoints";
+  return config.ws || "probing localhost websocket endpoints";
 }

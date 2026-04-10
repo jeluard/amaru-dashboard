@@ -52,54 +52,98 @@ function openSocket(url, timeoutMs = 2500) {
   });
 }
 
+function wait(delayMs) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, delayMs);
+  });
+}
+
 export function connectToStream(config, handlers) {
   const { onMessage, onState } = handlers;
   const endpoints = [...new Set([config.ws, ...(config.wsCandidates || [])].filter(Boolean))];
+  const retryDelayMs = 1500;
   let socket = null;
   let stopped = false;
 
   const start = async () => {
     onState({ kind: "connecting", label: endpoints.length ? endpoints[0] : "no websocket endpoint configured" });
 
-    let lastError = "";
+    while (!stopped) {
+      let lastError = "";
 
-    for (const endpoint of endpoints) {
-      if (stopped) {
-        return;
-      }
-
-      onState({ kind: "connecting", label: `trying ${endpoint}` });
-
-      try {
-        socket = await openSocket(endpoint);
-
+      for (const endpoint of endpoints) {
         if (stopped) {
-          socket.close();
           return;
         }
 
-        onState({ kind: "live", label: endpoint });
+        onState({ kind: "connecting", label: `trying ${endpoint}` });
 
-        socket.addEventListener("message", ({ data }) => {
-          emitParsed(data, onMessage);
-        });
+        try {
+          socket = await openSocket(endpoint);
 
-        socket.addEventListener("close", () => {
-          onState({ kind: "closed", label: `stream closed: ${endpoint}` });
-        });
+          if (stopped) {
+            socket.close();
+            return;
+          }
 
-        socket.addEventListener("error", () => {
-          onState({ kind: "error", label: `stream error: ${endpoint}` });
-        });
+          onState({ kind: "live", label: endpoint });
 
-        return;
-      } catch (error) {
-        lastError = `${endpoint} (${error.message})`;
+          await new Promise((resolve) => {
+            const activeSocket = socket;
+            let settled = false;
+
+            const finish = () => {
+              if (settled) {
+                return;
+              }
+
+              settled = true;
+              activeSocket.removeEventListener("message", handleMessage);
+              activeSocket.removeEventListener("close", handleClose);
+              activeSocket.removeEventListener("error", handleError);
+              resolve();
+            };
+
+            const handleMessage = ({ data }) => {
+              emitParsed(data, onMessage);
+            };
+
+            const handleClose = () => {
+              socket = null;
+              if (!stopped) {
+                onState({ kind: "connecting", label: `disconnected from ${endpoint}, retrying...` });
+              }
+              finish();
+            };
+
+            const handleError = () => {
+              socket = null;
+              if (!stopped) {
+                onState({ kind: "connecting", label: `stream error on ${endpoint}, retrying...` });
+              }
+
+              try {
+                activeSocket.close();
+              } catch {
+                // Ignore close failures during reconnect.
+              }
+
+              finish();
+            };
+
+            activeSocket.addEventListener("message", handleMessage);
+            activeSocket.addEventListener("close", handleClose);
+            activeSocket.addEventListener("error", handleError);
+          });
+        } catch (error) {
+          lastError = `${endpoint} (${error.message})`;
+        }
       }
-    }
 
-    if (!stopped) {
-      onState({ kind: "error", label: lastError || "no live websocket found" });
+      if (!stopped) {
+        onState({ kind: "connecting", label: lastError ? `retrying localhost endpoints after ${lastError}` : "retrying localhost endpoints" });
+        await wait(retryDelayMs);
+      }
     }
   };
 
