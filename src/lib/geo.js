@@ -8,30 +8,8 @@ const inflight = new Map();
 // in order; the first successful result wins.
 const GEO_PROVIDERS = [
   {
-    // https://ipwho.is — HTTPS, no API key, generous free tier
-    url: (ip) => `https://ipwho.is/${ip}`,
-    extract: (p) => ({
-      latitude: Number(p.latitude),
-      longitude: Number(p.longitude),
-      cityName: p.city || "unknown city",
-      countryName: p.country || "unknown country",
-    }),
-    ok: (p) => p.success !== false,
-  },
-  {
-    // https://ipapi.co — HTTPS, no API key, separate infrastructure
-    url: (ip) => `https://ipapi.co/${ip}/json/`,
-    extract: (p) => ({
-      latitude: Number(p.latitude),
-      longitude: Number(p.longitude),
-      cityName: p.city || "unknown city",
-      countryName: p.country_name || "unknown country",
-    }),
-    ok: (p) => !p.error,
-  },
-  {
-    // https://freeipapi.com — HTTPS, no API key, third fallback
-    url: (ip) => `https://freeipapi.com/api/json/${ip}`,
+    // https://free.freeipapi.com — HTTPS, no API key, browser-friendly
+    url: (ip) => `https://free.freeipapi.com/api/json/${ip}`,
     extract: (p) => ({
       latitude: Number(p.latitude),
       longitude: Number(p.longitude),
@@ -81,7 +59,7 @@ function normalizePeer(peer) {
 
 // Try each provider in sequence; return the first valid result.
 // If `customEndpoint` is provided (from config hash param), use it exclusively
-// with the same field normalization as ipwho.is.
+// with the same field normalization as the built-in provider.
 async function fetchGeo(ip, customEndpoint) {
   const providers = customEndpoint
     ? [{ url: () => `${customEndpoint}/${ip}`, extract: GEO_PROVIDERS[0].extract, ok: GEO_PROVIDERS[0].ok }]
