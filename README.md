@@ -2,6 +2,8 @@
 
 A web dashboard for monitoring an [Amaru](https://github.com/pragma-org/amaru) Cardano node. It connects via WebSocket to a running node and displays real-time metrics on an interactive globe.
 
+https://github.com/user-attachments/assets/943139bc-8b5f-43a2-aa58-13f098981f97
+
 ## Prerequisites
 
 - A running Amaru node
