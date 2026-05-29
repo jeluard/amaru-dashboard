@@ -164,6 +164,42 @@
           </div>
           <ol id="peer-feed" class="feed-list"></ol>
         </section>
+
+        <section class="tile tile--mempool tile--blue-deep" id="mempool-tile">
+          <div class="tile-no-data tile-no-data--dark">No data received yet</div>
+          <div class="ops-combined-header">
+            <div class="tile-header">
+              <p class="tile-label" style="color:rgba(255,255,255,0.7)">Mempool</p>
+            </div>
+            <div class="mempool-stats">
+              <div>
+                <span class="ops-stats__label">In mempool</span>
+                <span id="mempool-tx-count" class="ops-stats__value">—</span>
+              </div>
+              <div>
+                <span class="ops-stats__label">Size</span>
+                <span id="mempool-size" class="ops-stats__value">—</span>
+              </div>
+              <div>
+                <span class="ops-stats__label">Sync time</span>
+                <span id="mempool-sync" class="ops-stats__value">—</span>
+              </div>
+              <div>
+                <span class="ops-stats__label">Accepted</span>
+                <span id="mempool-accepted" class="ops-stats__value">0</span>
+              </div>
+              <div>
+                <span class="ops-stats__label">Rejected</span>
+                <span id="mempool-rejected" class="ops-stats__value">0</span>
+              </div>
+              <div>
+                <span class="ops-stats__label">Evicted</span>
+                <span id="mempool-evicted" class="ops-stats__value">0</span>
+              </div>
+            </div>
+          </div>
+          <ol id="mempool-feed" class="feed-list feed-list--light"></ol>
+        </section>
       </main>
     </div>
 

@@ -184,6 +184,14 @@ body.no-data .tile-no-data {
   z-index: 1;
 }
 
+.tile--mempool {
+  grid-column: 1 / span 12;
+  grid-row: 4;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  row-gap: 10px;
+}
+
 #metrics-tile {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -862,6 +870,24 @@ body.no-data .tile-no-data {
 .feed-item__tag--block { background: rgba(41,77,255,0.12); color: #294dff; }
 .feed-item__tag--peer  { background: rgba(102,255,0,0.15); color: #3a8c00; }
 .feed-item__tag--ops   { background: rgba(255,204,51,0.2); color: #7a5c00; }
+.feed-item__tag--mempool-success { background: rgba(102,255,0,0.2); color: #a6ff59; }
+.feed-item__tag--mempool-error   { background: rgba(255,107,107,0.22); color: #ff8080; }
+.feed-item__tag--mempool-warn    { background: rgba(255,204,51,0.22); color: #ffd966; }
+
+.feed-item__detail--mono {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mempool-stats {
+  display: grid;
+  flex: 1;
+  gap: 8px 12px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
 
 .ops-stats {
   display: grid;
@@ -928,6 +954,15 @@ body.no-data .tile-no-data {
     grid-row: 4;
   }
 
+  .tile--mempool {
+    grid-column: 1 / span 6;
+    grid-row: 5;
+  }
+
+  .mempool-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -957,7 +992,8 @@ body.no-data .tile-no-data {
   .tile--hero,
   .tile--globe,
   .tile--metrics,
-  .tile--ops {
+  .tile--ops,
+  .tile--mempool {
     grid-column: 1;
     grid-row: auto;
   }

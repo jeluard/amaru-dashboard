@@ -10,14 +10,20 @@ const rootDir = path.resolve(__dirname, "..");
 const port = Number(process.env.PORT || 8082);
 const wasmDir = path.join(rootDir, "wasm");
 
-// Build the amaru-kernel WASM module once at dev startup
-console.log("[wasm-pack] Building amaru-kernel-wasm (dev)...");
-execFileSync(
-  "wasm-pack",
-  ["build", "--target", "web", "--out-dir", "pkg", "--dev"],
-  { cwd: wasmDir, stdio: "inherit" }
-);
-console.log("[wasm-pack] Done.");
+// Build the amaru-kernel WASM module once at dev startup, unless already built.
+const wasmBinary = path.join(wasmDir, "pkg", "amaru_kernel_wasm_bg.wasm");
+const wasmAlreadyBuilt = await stat(wasmBinary).then(() => true).catch(() => false);
+if (wasmAlreadyBuilt) {
+  console.log("[wasm-pack] Skipping build — pkg already exists.");
+} else {
+  console.log("[wasm-pack] Building amaru-kernel-wasm (dev)...");
+  execFileSync(
+    "wasm-pack",
+    ["build", "--target", "web", "--out-dir", "pkg", "--dev"],
+    { cwd: wasmDir, stdio: "inherit" }
+  );
+  console.log("[wasm-pack] Done.");
+}
 
 const ctx = await esbuild.context({
   absWorkingDir: rootDir,

@@ -257,6 +257,13 @@ const METRIC_SHORT_LABELS = {
   rollback:                        "Tx rollback",
   save_point:                      "Checkpoint",
   validate_snapshots:              "Snapshots ok",
+  // mempool
+  cardano_node_metrics_mempoolBytes_int:        "Mempool size",
+  cardano_node_metrics_txsInMempool_int:         "Mempool txs",
+  cardano_node_metrics_txsProcessedNum_int:      "Txs processed",
+  cardano_node_metrics_txsSyncDuration_int:      "Sync time",
+  cardano_node_metrics_txsSyncDurationTotal_int: "Sync total",
+  amaru_metrics_mempoolTxInsertionsNum_int:      "Tx inserts",
 };
 
 const NOISE_WORDS = new Set(["a", "an", "the", "to", "of", "for", "from", "at", "in", "on", "by", "and", "or"]);
@@ -475,6 +482,34 @@ function renderOps(snapshot) {
   document.querySelector("#transition-count").textContent = snapshot.counters.epochTransitions;
 }
 
+function renderMempool(snapshot) {
+  const { mempool, metrics } = snapshot;
+
+  const txCountMetric = metrics.find((m) => m.name === "cardano_node_metrics_txsInMempool_int");
+  const sizeMetric = metrics.find((m) => m.name === "cardano_node_metrics_mempoolBytes_int");
+  const syncMetric = metrics.find((m) => m.name === "cardano_node_metrics_txsSyncDuration_int");
+
+  document.querySelector("#mempool-tx-count").textContent =
+    txCountMetric != null ? Math.round(txCountMetric.value).toLocaleString() : "\u2014";
+  document.querySelector("#mempool-size").textContent =
+    sizeMetric != null ? formatBytes(sizeMetric.value) : "\u2014";
+  document.querySelector("#mempool-sync").textContent =
+    syncMetric != null ? `${Math.round(syncMetric.value)}\u202fms` : "\u2014";
+  document.querySelector("#mempool-accepted").textContent = mempool.accepted.toLocaleString();
+  document.querySelector("#mempool-rejected").textContent = mempool.rejected.toLocaleString();
+  document.querySelector("#mempool-evicted").textContent = mempool.evicted.toLocaleString();
+
+  renderFeed("#mempool-feed", mempool.recentEvents, (event) => {
+    const tagClass = `feed-item__tag--mempool-${event.tone}`;
+    return `
+      <div class="feed-item__headline">${event.title}
+        <span class="feed-item__tag ${tagClass}">${event.tone === "success" ? "accepted" : event.tone === "error" ? "rejected" : "evicted"}</span>
+      </div>
+      <div class="feed-item__detail feed-item__detail--mono">${event.detail}</div>
+    `;
+  });
+}
+
 function renderPixelMaps(snapshot) {
   const peerCanvas = document.querySelector("#peer-map-canvas");
   const peerCtx = peerCanvas.getContext("2d");
@@ -635,6 +670,7 @@ export async function createDashboard() {
     renderMetrics(snapshot);
     renderEvents(snapshot); // throttled internally to 2s
     renderOps(snapshot);
+    renderMempool(snapshot);
     renderPeerTable(snapshot);
     globe.render(snapshot);
     refreshPeerGeo(snapshot, store, config).catch(console.warn);

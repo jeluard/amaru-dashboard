@@ -32,7 +32,13 @@ function createEmptyState(network) {
       spansSeen: 0,
       metricsSeen: 0
     },
-    liveArcs: []
+    liveArcs: [],
+    mempool: {
+      accepted: 0,
+      rejected: 0,
+      evicted: 0,
+      recentEvents: []
+    }
   };
 }
 
@@ -195,6 +201,45 @@ function applyOperationalEvent(state, span, attributes) {
   state.ops = pushEvent(state.ops, { title, detail, timestamp: now(), tone }, 10);
 }
 
+function applyMempoolSpan(state, span, attributes) {
+  const txId = attributes.tx_id || "";
+  switch (span.name) {
+    case "tx_accepted": {
+      state.mempool.accepted += 1;
+      const origin = attributes.origin || "";
+      state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
+        title: "accepted",
+        detail: `${txId}${origin ? " · " + origin : ""}`,
+        timestamp: now(),
+        tone: "success"
+      }, 15);
+      break;
+    }
+    case "tx_rejected": {
+      state.mempool.rejected += 1;
+      const reason = attributes.reason || "unknown";
+      state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
+        title: "rejected",
+        detail: `${txId} · ${reason}`,
+        timestamp: now(),
+        tone: "error"
+      }, 15);
+      break;
+    }
+    case "tx_evicted": {
+      state.mempool.evicted += 1;
+      const reason = attributes.reason || "";
+      state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
+        title: "evicted",
+        detail: `${txId}${reason ? " · " + reason : ""}`,
+        timestamp: now(),
+        tone: "warn"
+      }, 15);
+      break;
+    }
+  }
+}
+
 function applyMetricBatch(state, metrics) {
   state.counters.metricsSeen += metrics.length;
 
@@ -265,6 +310,10 @@ export function createStateStore(network) {
           state.currentEpoch = describeEpochProgress(state.network, state.tipSlot, state.tipSlot);
         }
 
+        if (span.target === "amaru::mempool") {
+          applyMempoolSpan(state, span, attributes);
+        }
+
         if (span.target === "amaru::protocols::manager") {
           applyPeerEvent(state, span, attributes);
         }
@@ -323,6 +372,7 @@ function snapshotState(state) {
     metrics,
     metricHistory,
     counters: { ...state.counters },
-    liveArcs: state.liveArcs.filter((arc) => now() - arc.startedAt < 12000)
+    liveArcs: state.liveArcs.filter((arc) => now() - arc.startedAt < 12000),
+    mempool: { ...state.mempool, recentEvents: state.mempool.recentEvents }
   };
 }
