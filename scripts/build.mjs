@@ -11,6 +11,14 @@ const wasmDir = path.join(rootDir, "wasm");
 
 await mkdir(outDir, { recursive: true });
 
+// On macOS, Apple Clang has no wasm32 backend; use Homebrew LLVM instead.
+// On Linux the system clang supports wasm32 natively so no override is needed.
+if (process.platform === "darwin") {
+  const llvmPrefix = execFileSync("brew", ["--prefix", "llvm"], { encoding: "utf8" }).trim();
+  process.env.CC_wasm32_unknown_unknown = `${llvmPrefix}/bin/clang`;
+  process.env.AR_wasm32_unknown_unknown = `${llvmPrefix}/bin/llvm-ar`;
+}
+
 // Build the amaru-kernel WASM module
 console.log("[wasm-pack] Building amaru-kernel-wasm...");
 execFileSync(
