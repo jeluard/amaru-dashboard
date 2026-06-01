@@ -1,0 +1,6 @@
+# Use Homebrew LLVM clang (which includes the wasm32 backend) when cross-compiling
+# C dependencies (e.g. secp256k1-sys) for the wasm32-unknown-unknown target.
+# Apple Clang does not ship with the LLVM wasm backend, so cc-rs would fail without this.
+[env]
+CC_wasm32_unknown_unknown = "/opt/homebrew/opt/llvm/bin/clang"
+AR_wasm32_unknown_unknown = "/opt/homebrew/opt/llvm/bin/llvm-ar"
