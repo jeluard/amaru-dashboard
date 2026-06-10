@@ -22,7 +22,7 @@ function setConnectionState(snapshot) {
 
   pill.textContent = snapshot.connectionState.kind;
   pill.className = classes[snapshot.connectionState.kind] || classes.idle;
-  sourceLabel.textContent = snapshot.connectionState.label;
+  sourceLabel.textContent = "";
 }
 
 function renderStreamBanner(snapshot) {
@@ -42,21 +42,19 @@ function renderStreamBanner(snapshot) {
     },
     connecting: {
       title: "Connecting to live stream",
-      copy: snapshot.connectionState.label.startsWith("trying ")
-        ? `${snapshot.connectionState.label}.`
-        : `Trying ${snapshot.connectionState.label}.`
+      copy: "Attempting to connect to the websocket stream."
     },
     live: {
       title: "Connected, waiting for first events",
-      copy: `The websocket is open on ${snapshot.connectionState.label}, but no spans or metrics have arrived yet.`
+      copy: "The websocket is open, but no spans or metrics have arrived yet."
     },
     closed: {
       title: "Live stream closed",
-      copy: `${snapshot.connectionState.label}.`
+      copy: "The connection was closed."
     },
     error: {
       title: "No live data",
-      copy: `${snapshot.connectionState.label}. Start the backend or pass a websocket explicitly with #ws=ws://host:port/ws.`
+      copy: "Start the backend or pass a websocket explicitly with #ws=ws://host:port/ws."
     }
   };
 
