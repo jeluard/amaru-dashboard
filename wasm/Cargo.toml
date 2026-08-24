@@ -8,4 +8,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wasm-bindgen = "0.2"
-amaru-kernel = { path = "../../../pragma-org/amaru/crates/amaru-kernel" }
+amaru-kernel = { git = "https://github.com/pragma-org/amaru.git", branch = "main" }

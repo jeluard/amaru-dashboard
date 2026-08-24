@@ -1,8 +1,5 @@
+use amaru_kernel::{Epoch, Slot, MAINNET_ERA_HISTORY, PREPROD_ERA_HISTORY, PREVIEW_ERA_HISTORY};
 use wasm_bindgen::prelude::*;
-use amaru_kernel::{
-    MAINNET_ERA_HISTORY, PREPROD_ERA_HISTORY, PREVIEW_ERA_HISTORY, TESTNET_ERA_HISTORY,
-    Slot, Epoch,
-};
 
 /// Returns a JSON string describing epoch progress for the given slot, or `undefined` when the
 /// slot is outside the known era history (e.g. past the time horizon).
@@ -17,7 +14,7 @@ pub fn describe_epoch_progress(network: &str, slot: u64, tip_slot: u64) -> Optio
         "mainnet" => &*MAINNET_ERA_HISTORY,
         "preprod" => &*PREPROD_ERA_HISTORY,
         "preview" => &*PREVIEW_ERA_HISTORY,
-        _ => &*TESTNET_ERA_HISTORY,
+        _ => return None,
     };
 
     let slot_v = Slot::from(slot);
