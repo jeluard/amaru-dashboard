@@ -1,4 +1,5 @@
 import { describeEpochProgress } from "./era-history-wasm.js";
+import { AMARU_EVENTS, isAmaruEvent, telemetryRecords } from "./events.js";
 import { now, toAttributesObject } from "./utils.js";
 
 function trimList(list, maxSize) {
@@ -34,6 +35,8 @@ function createEmptyState(network) {
     },
     liveArcs: [],
     mempool: {
+      txCount: null,
+      sizeBytes: null,
       accepted: 0,
       rejected: 0,
       evicted: 0,
@@ -64,77 +67,67 @@ function pushEvent(list, event, maxSize = 14) {
   return trimList(list, maxSize);
 }
 
-function applyPeerEvent(state, span, attributes) {
+function applyPeerEvent(state, record, attributes) {
   const peer = attributes.peer;
 
-  if (!peer) {
+  const connected = isAmaruEvent(record, AMARU_EVENTS.peerConnected);
+  const disconnected = isAmaruEvent(record, AMARU_EVENTS.peerDisconnected);
+  if (!peer || (!connected && !disconnected)) {
     return;
   }
 
   const peerState = ensurePeer(state, peer);
   peerState.lastSeenAt = now();
 
-  switch (span.name) {
-    case "add_peer":
-      peerState.status = "known";
-      break;
-    case "connect":
-      peerState.status = "connecting";
-      break;
-    case "accepted":
-      peerState.status = "active";
-      peerState.connections += 1;
-      state.liveArcs = pushEvent(state.liveArcs, {
-        peer,
-        status: "active",
-        startedAt: now(),
-        connId: attributes.conn_id || ""
-      }, 18);
-      break;
-    case "connection_died":
-      peerState.status = "disconnected";
-      peerState.connections = Math.max(0, peerState.connections - 1);
-      state.liveArcs = pushEvent(state.liveArcs, {
-        peer,
-        status: "error",
-        startedAt: now(),
-        connId: attributes.conn_id || ""
-      }, 18);
-      break;
-    case "remove_peer":
-      peerState.status = "removed";
-      break;
-    default:
-      break;
+  if (connected) {
+    peerState.status = "active";
+    peerState.connections += 1;
+    state.liveArcs = pushEvent(state.liveArcs, {
+      peer,
+      status: "active",
+      startedAt: now(),
+      connId: attributes.conn_id || ""
+    }, 18);
+  } else {
+    peerState.status = "disconnected";
+    peerState.connections = Math.max(0, peerState.connections - 1);
+    state.liveArcs = pushEvent(state.liveArcs, {
+      peer,
+      status: "error",
+      startedAt: now(),
+      connId: attributes.conn_id || ""
+    }, 18);
   }
 
   state.peerEvents = pushEvent(state.peerEvents, {
-    title: span.name.replaceAll("_", " "),
-    detail: peer,
+    title: connected ? "peer connected" : "peer disconnected",
+    detail: `${peer}${attributes.reason ? ` · ${attributes.reason}` : ""}`,
     timestamp: now(),
     tone: peerState.status
   });
 }
 
-function updateCurrentBlock(state, span, attributes) {
-  const trackedStages = new Set([
-    "create_validation_context",
-    "prepare_block",
-    "validate_block",
-    "apply_block",
-    "store_block",
-    "store_header",
-    "volatile_to_stable"
-  ]);
-
-  if (!trackedStages.has(span.name)) {
+function updateCurrentBlock(state, record, attributes) {
+  if (isAmaruEvent(record, AMARU_EVENTS.tipUpdate)) {
+    const block = {
+      number: Number(attributes.block_height),
+      hash: attributes.header_hash,
+      bodySize: null,
+      totalInputs: Number(attributes.tx_count || 0),
+      slot: Number(attributes.slot),
+      stage: "adopted",
+      updatedAt: now(),
+      stages: ["adopted"]
+    };
+    state.currentBlock = block;
+    state.blocks = pushEvent(state.blocks.filter((item) => item.hash !== block.hash), block, 10);
     return;
   }
 
-  if (span.name === "create_validation_context") {
+  if (isAmaruEvent(record, AMARU_EVENTS.validationContextCreate)) {
     const block = {
       number: Number(attributes.block_number),
-      hash: attributes.block_body_hash,
+      hash: attributes.block_id,
       bodySize: Number(attributes.block_body_size),
       totalInputs: Number(attributes.total_inputs || 0),
       slot: state.tipSlot,
@@ -151,7 +144,15 @@ function updateCurrentBlock(state, span, attributes) {
     return;
   }
 
-  const stageName = span.name.replaceAll("_", " ");
+  const stage = [
+    [AMARU_EVENTS.blockPrepare, "prepare"],
+    [AMARU_EVENTS.blockApply, "apply"],
+    [AMARU_EVENTS.blockStore, "store block"],
+    [AMARU_EVENTS.headerStore, "store header"]
+  ].find(([event]) => isAmaruEvent(record, event));
+  if (!stage) return;
+
+  const stageName = stage[1];
   state.currentBlock.stage = stageName;
   state.currentBlock.updatedAt = now();
 
@@ -159,84 +160,83 @@ function updateCurrentBlock(state, span, attributes) {
     state.currentBlock.stages.push(stageName);
   }
 
-  if (span.name === "apply_block" && Number.isFinite(Number(attributes.point_slot))) {
+  if (isAmaruEvent(record, AMARU_EVENTS.blockApply) && Number.isFinite(Number(attributes.point_slot))) {
     state.tipSlot = Number(attributes.point_slot);
     state.currentBlock.slot = state.tipSlot;
   }
 
-  if (span.name === "store_block" && attributes.hash) {
+  if (isAmaruEvent(record, AMARU_EVENTS.blockStore) && attributes.hash) {
     state.currentBlock.hash = attributes.hash;
   }
 
   state.blocks = [state.currentBlock, ...state.blocks.filter((block) => block.hash !== state.currentBlock.hash)].slice(0, 10);
 }
 
-function applyOperationalEvent(state, span, attributes) {
-  const title = span.name.replaceAll("_", " ");
-  let detail = span.target;
+function applyOperationalEvent(state, record, attributes) {
+  let title;
+  let detail;
   let tone = "info";
 
-  if (span.name === "rollback_chain") {
+  if (isAmaruEvent(record, AMARU_EVENTS.chainSwitchToFork)) {
+    title = "chain switched to fork";
     state.counters.rollbacks += 1;
-    detail = `${attributes.slot || "unknown slot"} ${attributes.hash || ""}`.trim();
+    detail = `${attributes.fork_point || "unknown point"} · ${attributes.rollback_length || 0} blocks`;
     tone = "error";
-  }
-
-  if (span.name === "volatile_to_stable") {
+  } else if (isAmaruEvent(record, AMARU_EVENTS.blockApply)) {
+    title = "block applied";
     state.counters.stableWrites += 1;
-    detail = attributes.persisted_point || "persisted block";
+    detail = attributes.point_slot || "unknown slot";
     tone = "success";
-  }
-
-  if (span.name === "vote") {
+  } else if (isAmaruEvent(record, AMARU_EVENTS.voteStore)) {
+    title = "votes stored";
     state.counters.votes += 1;
-    detail = `${attributes.voter_type || "voter"} ${attributes.credential_hash || ""}`.trim();
-  }
-
-  if (span.name === "epoch_transition") {
+    detail = "ledger votes updated";
+  } else if (isAmaruEvent(record, AMARU_EVENTS.epochTransition)) {
+    title = "epoch transition";
     state.counters.epochTransitions += 1;
     detail = `${attributes.from || "?"} -> ${attributes.into || "?"}`;
+  } else {
+    return;
   }
 
   state.ops = pushEvent(state.ops, { title, detail, timestamp: now(), tone }, 10);
 }
 
-function applyMempoolSpan(state, span, attributes) {
-  const txId = attributes.tx_id || "";
-  switch (span.name) {
-    case "tx_accepted": {
-      state.mempool.accepted += 1;
-      const origin = attributes.origin || "";
-      state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
-        title: "accepted",
-        detail: `${txId}${origin ? " · " + origin : ""}`,
-        timestamp: now(),
-        tone: "success"
-      }, 15);
-      break;
-    }
-    case "tx_rejected": {
-      state.mempool.rejected += 1;
-      const reason = attributes.reason || "unknown";
-      state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
-        title: "rejected",
-        detail: `${txId} · ${reason}`,
-        timestamp: now(),
-        tone: "error"
-      }, 15);
-      break;
-    }
-    case "tx_evicted": {
-      state.mempool.evicted += 1;
-      const reason = attributes.reason || "";
-      state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
-        title: "evicted",
-        detail: `${txId}${reason ? " · " + reason : ""}`,
-        timestamp: now(),
-        tone: "warn"
-      }, 15);
-      break;
-    }
+function applyMempoolEvent(state, record, attributes) {
+  if (isAmaruEvent(record, AMARU_EVENTS.mempoolUpdate)) {
+    state.mempool.txCount = Number(attributes.tx_count);
+    state.mempool.sizeBytes = Number(attributes.size_bytes);
+    return;
+  }
+
+  const txId = attributes.id || "";
+  if (isAmaruEvent(record, AMARU_EVENTS.transactionAccepted)) {
+    state.mempool.accepted += 1;
+    const origin = attributes.origin || "";
+    state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
+      title: "accepted",
+      detail: `${txId}${origin ? " · " + origin : ""}`,
+      timestamp: now(),
+      tone: "success"
+    }, 15);
+  } else if (isAmaruEvent(record, AMARU_EVENTS.transactionRejected)) {
+    state.mempool.rejected += 1;
+    const reason = attributes.reason || "unknown";
+    state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
+      title: "rejected",
+      detail: `${txId} · ${reason}`,
+      timestamp: now(),
+      tone: "error"
+    }, 15);
+  } else if (isAmaruEvent(record, AMARU_EVENTS.transactionEvicted)) {
+    state.mempool.evicted += 1;
+    const reason = attributes.reason || "";
+    state.mempool.recentEvents = pushEvent(state.mempool.recentEvents, {
+      title: "evicted",
+      detail: `${txId}${reason ? " · " + reason : ""}`,
+      timestamp: now(),
+      tone: "warn"
+    }, 15);
   }
 }
 
@@ -296,50 +296,38 @@ export function createStateStore(network) {
         return;
       }
 
-      if (message.type !== "spans_batch") {
+      const records = telemetryRecords(message);
+      if (records.length === 0) {
         return;
       }
 
-      state.counters.spansSeen += (message.spans || []).length;
+      state.counters.spansSeen += records.length;
 
-      for (const span of message.spans || []) {
-        const attributes = toAttributesObject(span.attributes);
+      for (const record of records) {
+        const attributes = toAttributesObject(record.attributes);
 
-        if (span.name === "apply_block" && Number.isFinite(Number(attributes.point_slot))) {
-          state.tipSlot = Number(attributes.point_slot);
-          state.currentEpoch = describeEpochProgress(state.network, state.tipSlot, state.tipSlot);
+        if (isAmaruEvent(record, AMARU_EVENTS.tipUpdate)) {
+          state.tipSlot = Number(attributes.slot);
+          const derived = describeEpochProgress(state.network, state.tipSlot, state.tipSlot);
+          state.currentEpoch = derived
+            ? {
+                ...derived,
+                epoch: Number(attributes.epoch),
+                slotInEpoch: Number(attributes.slot_in_epoch)
+              }
+            : {
+                epoch: Number(attributes.epoch),
+                slotInEpoch: Number(attributes.slot_in_epoch),
+                epochSizeSlots: state.currentEpoch?.epochSizeSlots || 432000,
+                progress: state.currentEpoch?.progress || 0,
+                nextEpochSlot: state.currentEpoch?.nextEpochSlot || 0
+              };
         }
 
-        if (span.target === "amaru::mempool") {
-          applyMempoolSpan(state, span, attributes);
-        }
-
-        if (span.target === "amaru::protocols::manager") {
-          applyPeerEvent(state, span, attributes);
-        }
-
-        if (span.target === "amaru::ledger::state" || span.target === "amaru::stores::consensus") {
-          updateCurrentBlock(state, span, attributes);
-        }
-
-        if (
-          span.name === "rollback_chain" ||
-          span.name === "volatile_to_stable" ||
-          span.name === "vote" ||
-          span.name === "epoch_transition"
-        ) {
-          applyOperationalEvent(state, span, attributes);
-        }
-
-        if (span.name === "epoch_transition") {
-          state.currentEpoch = {
-            epoch: Number(attributes.into),
-            slotInEpoch: 0,
-            epochSizeSlots: state.currentEpoch?.epochSizeSlots || 432000,
-            progress: 0,
-            nextEpochSlot: state.currentEpoch?.nextEpochSlot || 0
-          };
-        }
+        applyMempoolEvent(state, record, attributes);
+        applyPeerEvent(state, record, attributes);
+        updateCurrentBlock(state, record, attributes);
+        applyOperationalEvent(state, record, attributes);
       }
 
       if (state.tipSlot != null) {

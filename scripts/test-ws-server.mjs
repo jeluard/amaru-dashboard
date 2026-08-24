@@ -49,16 +49,18 @@ server.on("upgrade", (req, socket) => {
 
   let tick = 0;
 
-  // Send accepted event for each peer immediately
+  // Send current Amaru peer-connected events for each peer immediately.
   for (const peer of PEERS) {
     send(socket, {
-      type: "spans_batch",
-      spans: [{
-        name: "accepted",
-        target: "amaru::protocols::manager",
+      type: "logs_batch",
+      logs: [{
+        body: "peer_selection.peer.connected",
         attributes: [
           ["peer", peer],
-          ["conn_id", `conn-${peer}`]
+          ["conn_id", "1"],
+          ["direction", "outbound"],
+          ["full_duplex_capable", "true"],
+          ["full_duplex", "true"]
         ]
       }]
     });
@@ -69,13 +71,15 @@ server.on("upgrade", (req, socket) => {
     tick++;
     const peer = PEERS[tick % PEERS.length];
     send(socket, {
-      type: "spans_batch",
-      spans: [{
-        name: "accepted",
-        target: "amaru::protocols::manager",
+      type: "logs_batch",
+      logs: [{
+        body: "peer_selection.peer.connected",
         attributes: [
           ["peer", peer],
-          ["conn_id", `conn-${tick}`]
+          ["conn_id", String(tick)],
+          ["direction", "outbound"],
+          ["full_duplex_capable", "true"],
+          ["full_duplex", "true"]
         ]
       }]
     });

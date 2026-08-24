@@ -488,9 +488,13 @@ function renderMempool(snapshot) {
   const syncMetric = metrics.find((m) => m.name === "cardano_node_metrics_txsSyncDuration_int");
 
   document.querySelector("#mempool-tx-count").textContent =
-    txCountMetric != null ? Math.round(txCountMetric.value).toLocaleString() : "\u2014";
+    txCountMetric != null
+      ? Math.round(txCountMetric.value).toLocaleString()
+      : mempool.txCount != null ? mempool.txCount.toLocaleString() : "\u2014";
   document.querySelector("#mempool-size").textContent =
-    sizeMetric != null ? formatBytes(sizeMetric.value) : "\u2014";
+    sizeMetric != null
+      ? formatBytes(sizeMetric.value)
+      : mempool.sizeBytes != null ? formatBytes(mempool.sizeBytes) : "\u2014";
   document.querySelector("#mempool-sync").textContent =
     syncMetric != null ? `${Math.round(syncMetric.value)}\u202fms` : "\u2014";
   document.querySelector("#mempool-accepted").textContent = mempool.accepted.toLocaleString();
